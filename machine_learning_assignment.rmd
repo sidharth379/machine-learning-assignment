@@ -1,0 +1,145 @@
+---
+title: "Machine learning assignment"
+author: "Sidharth Sharma"
+date: "29 July 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+## 
+
+You can also embed plots, for example:
+## loading packages
+```{r pressure}
+
+library(lattice)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(corrplot)
+library(rattle)
+library(randomForest)
+library(gbm)
+library(RColorBrewer)
+```
+##  loading data
+```{r pressure}
+
+set.seed(465616)
+url_train<- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url_test<- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+data_train<-read.csv(url(url_train))
+data_test<-read.csv(url(url_test))
+
+dim(data_train)
+dim(data_test)
+```
+
+## data cleaning
+```{r pressure}
+in_train<- createDataPartition(data_train$classe, p=0.7, list=F)
+train_set<-data_train[in_train, ]
+test_set<- data_train[-in_train, ]
+
+dim(data_train)
+dim(data_test)
+
+nzr_var<-nearZeroVar(train_set)
+
+train_set<-train_set[ ,-nzr_var]
+test_set<-test_set[ , -nzr_var]
+
+
+dim(train_set)
+dim(test_set)
+
+na_var<-sapply(train_set, function(x) mean(is.na(x))) > 0.95
+train_set<-train_set[, na_var == "FALSE"]
+test_set<-test_set[, na_var == "FALSE"]
+
+dim(train_set)
+dim(test_set)
+
+train_set<-train_set[, -(1:5)]
+test_set<-test_set[, -(1:5)]
+
+dim(train_set)
+dim(test_set)
+```
+
+## correlation analysis
+```{r pressure}
+corr_matrix<-cor(train_set[ ,-54])
+corrplot(corr_matrix, order="FPC", method="circle",type="lower",
+         tl.cex=0.6,tl.col=rgb(0,0,0))
+```
+
+## prediction models
+### 1) random forest
+
+```{r pressure}
+set.seed(23445)
+control_randomforest<-trainControl(method="repeatedcv", number=5, repeats = 2)
+modfit_randomforest  <- train(classe ~ ., data = train_set, method = "rf",
+                  trControl = control_randomforest, verbose = FALSE)
+modfit_randomforest$finalModel
+
+predict_randomforest<-predict(modfit_randomforest,newdata=test_set)
+confmat_randomforest<-confusionMatrix(predict_randomforest,test_set$classe)
+confmat_randomforest
+
+
+plot(confmat_randomforest$table, col = confmat_randomforest$byClass, 
+     main = paste("Random Forest - Accuracy =",
+                  round(confmat_randomforest$overall['Accuracy'], 4)))
+```
+
+### 2) decision tree
+```{r pressure}
+set.seed(651849)
+modfit_decisiontree<- rpart(classe ~ ., data=train_set, method="class")
+fancyRpartPlot(modfit_decisiontree)
+
+predict_decisiontree<-predict(modfit_decisiontree,newdata=test_set,type="class")
+confmat_decisiontree<-confusionMatrix(predict_decisiontree,test_set$classe)
+confmat_decisiontree
+
+plot(confmat_decisiontree$table, col = confmat_decisiontree$byClass, 
+     main = paste("Decision Tree - Accuracy =",
+                  round(confmat_decisiontree$overall['Accuracy'], 4)))
+```
+### 3) generalized boosted model
+```{r pressure}
+set.seed(12345)
+control_GBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modfit_GBM  <- train(classe ~ ., data=train_set, method = "gbm",
+                    trControl = control_GBM, verbose = FALSE)
+modfit_GBM$finalModel
+
+predict_GBM <- predict(modfit_GBM, newdata=test_set)
+confmat_GBM <- confusionMatrix(predict_GBM, test_set$classe)
+confmat_GBM
+
+plot(confmat_GBM$table, col = confmat_GBM$byClass, 
+     main = paste("GBM - Accuracy =", round(confmat_GBM$overall['Accuracy'], 4)))
+```
+## Applying selected model to the test data
+```{r pressure}
+predictTEST <- data.frame(case.no=seq(1:20),predict(modfit_randomforest, newdata=test_set))
+predictTEST
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
